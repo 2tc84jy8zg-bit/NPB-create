@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NPB編成ツール</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#f1f5f9;color:#172033;margin:0}
+header{background:#14213d;color:white;padding:20px}
+main{max-width:760px;margin:auto;padding:14px}
+section{background:white;border-radius:14px;padding:16px;margin-bottom:14px}
+h1{font-size:23px;margin:0}h2{font-size:18px}
+select,input,button{font:inherit;padding:11px;border-radius:9px;border:1px solid #cbd5e1}
+select,input{max-width:100%;box-sizing:border-box}
+button{background:#2563eb;color:white;border:0;font-weight:bold}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+.controls select{flex:1;min-width:120px}
+.tabs{display:flex;gap:8px;margin:14px 0}
+.tabs button{flex:1;background:#e2e8f0;color:#172033}
+.tabs button.active{background:#2563eb;color:white}
+form{display:grid;gap:10px}
+form input,form select{width:100%}
+.player{display:flex;align-items:center;gap:8px;border-bottom:1px solid #e2e8f0;padding:12px 0}
+.info{flex:1;overflow-wrap:anywhere}.meta{font-size:12px;color:#64748b}
+.actions{display:flex;gap:5px}.actions button{font-size:12px;padding:8px}
+.delete{background:#dc2626}.empty{padding:20px;text-align:center;color:#64748b}
+small{color:#64748b;line-height:1.7}
+</style>
+</head>
+<body>
+<header><h1>⚾ NPB編成ツール</h1><div>一軍・二軍 選手管理</div></header>
+<main>
+<section>
+<div class="controls">
+<select id="team">
+<option>阪神タイガース</option>
+<option>埼玉西武ライオンズ</option>
+</select>
+<select id="year">
+<option>2026</option><option>2025</option><option>2024</option>
+</select>
+</div>
+<div class="tabs">
+<button class="active" data-s="一軍">一軍</button>
+<button data-s="二軍">二軍</button>
+</div>
+<div id="summary"></div>
+</section>
+<section>
+<h2>選手を追加</h2>
+<form id="form">
+<input id="name" placeholder="選手名" required maxlength="50">
+<div class="controls">
+<select id="pos">
+<option>投手</option><option>捕手</option>
+<option>内野手</option><option>外野手</option><option>DH</option>
+</select>
+<input id="num" placeholder="背番号" inputmode="numeric" maxlength="3">
+</div>
+<button>＋ 選手を登録</button>
+</form>
+</section>
+<section>
+<h2 id="title">一軍選手</h2>
+<div id="list"></div>
+</section>
+<section>
+<h2>データのバックアップ</h2>
+<button id="export">バックアップを書き出す</button>
+<p><small>データは現在のブラウザ内に保存されます。端末変更やブラウザのデータ削除に備え、定期的にバックアップしてください。</small></p>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const KEY='npb-roster-v1';
+let db={};
+let squad='一軍';
+try{db=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){db={}}
+function bucket(){
+ const k=$('team').value+'_'+$('year').value;
+ if(!db[k])db[k]={'一軍':[],'二軍':[]};
+ return db[k];
+}
+function save(){localStorage.setItem(KEY,JSON.stringify(db));render()}
+function render(){
+ document.querySelectorAll('[data-s]').forEach(b=>
+ b.classList.toggle('active',b.dataset.s===squad));
+ $('title').textContent=squad+'選手';
+ const b=bucket(),arr=b[squad];
+ $('summary').textContent='一軍 '+b['一軍'].length+'人 ／ 二軍 '+b['二軍'].length+'人';
+ $('list').innerHTML='';
+ if(!arr.length){
+ $('list').innerHTML='<div class="empty">選手がいません。上から登録してください。</div>';
+ return;
+ }
+ arr.forEach(p=>{
+ const row=document.createElement('div');row.className='player';
+ const info=document.createElement('div');info.className='info';
+ const name=document.createElement('strong');
+ name.textContent=(p.num?'#'+p.num+' ':'')+p.name;
+ const meta=document.createElement('div');meta.className='meta';
+ meta.textContent=p.pos;
+ info.append(name,meta);
+ const actions=document.createElement('div');actions.className='actions';
+ const move=document.createElement('button');
+ move.textContent=squad==='一軍'?'二軍へ':'一軍へ';
+ move.onclick=()=>{
+ const dest=squad==='一軍'?'二軍':'一軍';
+ b[dest].push(p);
+ b[squad]=b[squad].filter(x=>x.id!==p.id);
+ save();
+ };
+ const del=document.createElement('button');del.textContent='削除';
+ del.className='delete';
+ del.onclick=()=>{
+ if(confirm(p.name+'を削除しますか？')){
+ b[squad]=b[squad].filter(x=>x.id!==p.id);save();
+ }
+ };
+ actions.append(move,del);row.append(info,actions);$('list').append(row);
+ });
+}
+$('form').onsubmit=e=>{
+ e.preventDefault();
+ bucket()[squad].push({
+ id:Date.now()+Math.random(),
+ name:$('name').value.trim(),
+ pos:$('pos').value,num:$('num').value.trim()
+ });
+ $('form').reset();save();
+};
+document.querySelectorAll('[data-s]').forEach(b=>
+ b.onclick=()=>{squad=b.dataset.s;render()});
+$('team').onchange=render;
+$('year').onchange=render;
+$('export').onclick=()=>{
+ const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement('a');
+ a.href=url;a.download='npb-backup.json';a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+render();
+</script>
+</body>
+</html>
