@@ -1,0 +1,350 @@
+
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10213a">
+<title>NPB 一軍・二軍編成ツール</title>
+<style>
+:root{--navy:#10213a;--blue:#1e5aa8;--bg:#f3f6fb;--line:#dbe2ed;--muted:#667085}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{background:var(--navy);color:white;padding:22px 16px 18px}
+header h1{font-size:21px;margin:0 0 6px}
+header p{margin:0;font-size:12px;color:#d8e2f1}
+.wrap{max-width:980px;margin:auto;padding:14px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px;box-shadow:0 2px 8px #14213b0a}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:5px}
+select,input,button{font:inherit}
+select,input{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:9px;background:white;color:#172033}
+button{border:0;border-radius:9px;padding:10px 12px;font-weight:650;cursor:pointer}
+.primary{background:var(--blue);color:white}
+.secondary{background:#eaf0f8;color:#1c3658}
+.danger{background:#fff0f0;color:#b42318}
+.tabs{display:flex;gap:7px;overflow:auto;margin:12px 0}
+.tab{white-space:nowrap;background:#e6ebf3;color:#334155}
+.tab.active{background:var(--navy);color:white}
+.summary{display:flex;gap:8px;flex-wrap:wrap}
+.pill{background:#edf3fb;border-radius:999px;padding:6px 10px;font-size:12px}
+.player{border:1px solid var(--line);border-radius:11px;padding:11px;margin-top:9px;display:flex;align-items:center;gap:10px}
+.num{min-width:36px;text-align:center;font-weight:800;background:#f0f3f8;border-radius:7px;padding:7px 3px;font-size:13px}
+.pinfo{flex:1;min-width:0}
+.pname{font-weight:750}
+.meta{font-size:12px;color:var(--muted);margin-top:3px}
+.actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.actions button{padding:8px;font-size:12px}
+.empty{text-align:center;color:var(--muted);padding:26px 8px}
+.addgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.addgrid .wide{grid-column:1/-1}
+.foot{font-size:11px;color:var(--muted);line-height:1.6;padding:8px}
+@media(min-width:700px){.controls{grid-template-columns:1fr 1fr 1fr}}
+</style>
+</head>
+<body>
+<header>
+<h1>⚾ NPB 一軍・二軍編成ツール</h1>
+<p>阪神タイガース ／ 埼玉西武ライオンズ ・ 編集内容はこの端末内に保存</p>
+</header>
+<main class="wrap">
+<section class="panel">
+<div class="controls">
+<div><label for="team">球団</label><select id="team"><option value="tigers">阪神タイガース</option><option value="lions">埼玉西武ライオンズ</option></select></div>
+<div><label for="search">選手検索</label><input id="search" placeholder="選手名・背番号・守備位置"></div>
+<div><label for="sort">表示順</label><select id="sort"><option value="number">背番号順</option><option value="name">名前順</option><option value="position">守備位置順</option></select></div>
+</div>
+<div class="tabs" id="tabs">
+<button class="tab active" data-view="pool">全選手・未編成</button>
+<button class="tab" data-view="first">一軍</button>
+<button class="tab" data-view="second">二軍</button>
+<button class="tab" data-view="all">選手名簿</button>
+</div>
+<div class="summary" id="summary"></div>
+</section>
+<section class="panel">
+<h3>選手を追加</h3>
+<div class="addgrid">
+<div><label for="newNo">背番号</label><input id="newNo" placeholder="例：99"></div>
+<div><label for="newPos">守備位置</label><select id="newPos"><option>投手</option><option>捕手</option><option>内野手</option><option>外野手</option></select></div>
+<div class="wide"><label for="newName">選手名</label><input id="newName" placeholder="選手名"></div>
+<div><label for="newContract">契約区分</label><select id="newContract"><option>支配下</option><option>育成</option></select></div>
+<div><label for="newStatus">登録先</label><select id="newStatus"><option value="pool">未編成</option><option value="first">一軍</option><option value="second">二軍</option></select></div>
+<button class="primary wide" id="addBtn">選手を追加</button>
+</div>
+</section>
+<section class="panel">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 id="listTitle">全選手・未編成</h3><button class="secondary" id="exportBtn">編成を書き出す</button></div>
+<div id="list"></div>
+</section>
+<section class="panel">
+<h3>データについて</h3>
+<div class="foot">初期名簿を登録しています。選手の移籍・登録変更などは手動で確認してください。保存データは利用している端末・ブラウザごとに別々です。</div>
+<button class="danger" id="resetBtn">この球団の編成を初期状態に戻す</button>
+</section>
+</main>
+<script>
+const ROSTERS={
+tigers:`13|岩崎優|投手|支配下
+14|岩貞祐太|投手|支配下
+16|西勇輝|投手|支配下
+18|伊原陵人|投手|支配下
+19|下村海翔|投手|支配下
+21|大竹耕太郎|投手|支配下
+26|椎葉剛|投手|支配下
+27|伊藤将司|投手|支配下
+28|今朝丸裕喜|投手|支配下
+29|髙橋遥人|投手|支配下
+30|門別啓人|投手|支配下
+35|才木浩人|投手|支配下
+36|畠世周|投手|支配下
+37|及川雅貴|投手|支配下
+41|村上頌樹|投手|支配下
+42|ルーカス|投手|支配下
+44|早瀬朔|投手|支配下
+46|ラグズデール|投手|支配下
+47|桐敷拓馬|投手|支配下
+48|茨木秀俊|投手|支配下
+49|工藤泰成|投手|支配下
+50|富田蓮|投手|支配下
+51|早川太貴|投手|支配下
+54|木下里都|投手|支配下
+55|能登嵩都|投手|支配下
+63|石黒佑弥|投手|支配下
+64|岡留英貴|投手|支配下
+65|湯浅京己|投手|支配下
+66|津田淳哉|投手|支配下
+69|石井大智|投手|支配下
+95|神宮僚介|投手|支配下
+97|セベリーノ|投手|支配下
+98|ドリス|投手|支配下
+99|モレッタ|投手|支配下
+2|梅野隆太郎|捕手|支配下
+12|坂本誠志郎|捕手|支配下
+17|伏見寅威|捕手|支配下
+39|榮枝裕貴|捕手|支配下
+43|町田隼乙|捕手|支配下
+57|長坂拳弥|捕手|支配下
+59|藤田健斗|捕手|支配下
+68|中川勇斗|捕手|支配下
+85|嶋村麟士朗|捕手|支配下
+00|元山飛優|内野手|支配下
+0|木浪聖也|内野手|支配下
+3|大山悠輔|内野手|支配下
+4|熊谷敬宥|内野手|支配下
+7|中野拓夢|内野手|支配下
+8|佐藤輝明|内野手|支配下
+9|立石正広|内野手|支配下
+24|ディベイニー|内野手|支配下
+25|谷端将伍|内野手|支配下
+33|糸原健斗|内野手|支配下
+38|小幡竜平|内野手|支配下
+45|佐野大陽|内野手|支配下
+52|山田脩也|内野手|支配下
+56|百﨑蒼生|内野手|支配下
+62|植田海|内野手|支配下
+67|髙寺望夢|内野手|支配下
+1|森下翔太|外野手|支配下
+5|近本光司|外野手|支配下
+32|濱田太貴|外野手|支配下
+34|岡城快生|外野手|支配下
+40|井坪陽生|外野手|支配下
+53|島田海吏|外野手|支配下
+58|前川右京|外野手|支配下
+60|小野寺暖|外野手|支配下
+61|豊田寛|外野手|支配下
+92|福島圭音|外野手|支配下
+94|ガルシア|外野手|支配下
+122|小川一平|投手|育成
+123|松原快|投手|育成
+125|伊藤稜|投手|育成
+132|マルティネス|投手|育成
+121|戸井零士|内野手|育成
+130|川﨑俊哲|内野手|育成
+133|アルナエス|内野手|育成
+120|西純矢|外野手|育成
+129|山﨑照英|外野手|育成
+134|コンスエグラ|外野手|育成`,
+lions:`11|上田大河|投手|支配下
+12|渡邉勇太朗|投手|支配下
+13|髙橋光成|投手|支配下
+15|與座海人|投手|支配下
+16|隅田知一郎|投手|支配下
+17|松本航|投手|支配下
+19|佐藤隼輔|投手|支配下
+20|岩城颯空|投手|支配下
+21|武内夏暉|投手|支配下
+23|糸川亮太|投手|支配下
+28|森脇亮介|投手|支配下
+29|青山美夏人|投手|支配下
+30|ワイナンス|投手|支配下
+34|甲斐野央|投手|支配下
+36|山田陽翔|投手|支配下
+40|堀越啓太|投手|支配下
+41|成田晴風|投手|支配下
+43|羽田慎之介|投手|支配下
+45|ウィンゲンター|投手|支配下
+46|狩生聖真|投手|支配下
+47|杉山遙希|投手|支配下
+52|篠原響|投手|支配下
+54|黒木優太|投手|支配下
+56|ラミレス|投手|支配下
+57|黒田将矢|投手|支配下
+58|中村祐太|投手|支配下
+61|平良海馬|投手|支配下
+67|冨士大和|投手|支配下
+70|豆田泰志|投手|支配下
+71|菅井信也|投手|支配下
+75|佐藤爽|投手|支配下
+90|浜屋将太|投手|支配下
+10|小島大河|捕手|支配下
+22|古賀悠斗|捕手|支配下
+27|炭谷銀仁朗|捕手|支配下
+37|柘植世那|捕手|支配下
+53|牧野翔矢|捕手|支配下
+64|龍山暖|捕手|支配下
+65|是澤涼輔|捕手|支配下
+00|仲田慶介|内野手|支配下
+0|児玉亮涼|内野手|支配下
+2|齋藤大翔|内野手|支配下
+4|石井一成|内野手|支配下
+5|外崎修汰|内野手|支配下
+6|源田壮亮|内野手|支配下
+26|ネビン|内野手|支配下
+32|山村崇嘉|内野手|支配下
+38|佐藤太陽|内野手|支配下
+39|平沢大河|内野手|支配下
+50|髙松渡|内野手|支配下
+59|横田蒼和|内野手|支配下
+60|中村剛也|内野手|支配下
+62|滝澤夏央|内野手|支配下
+99|村田怜音|内野手|支配下
+1|栗山巧|外野手|支配下
+7|桑原将志|外野手|支配下
+8|渡部聖弥|外野手|支配下
+9|蛭間拓哉|外野手|支配下
+25|カナリオ|外野手|支配下
+31|茶野篤政|外野手|支配下
+33|古川雄大|外野手|支配下
+35|秋山俊|外野手|支配下
+44|林冠臣|外野手|支配下
+49|若林楽人|外野手|支配下
+51|西川愛也|外野手|支配下
+55|仲三優太|外野手|支配下
+63|長谷川信哉|外野手|支配下
+66|川田悠慎|外野手|支配下
+68|岸潤一郎|外野手|支配下
+73|林安可|外野手|支配下
+114|上間永遠|投手|育成
+115|佐々木健|投手|育成
+117|宮澤太成|投手|育成
+118|斎藤佳紳|投手|育成
+121|三浦大輝|投手|育成
+124|濱岡蒼太|投手|育成
+125|シンクレア|投手|育成
+128|平口寛人|投手|育成
+129|川下将勲|投手|育成
+131|木瀬翔太|投手|育成
+134|正木悠馬|投手|育成
+136|高橋礼|投手|育成
+141|ムサ|投手|育成
+142|フレッド|投手|育成
+144|ゴンザレス|投手|育成
+145|オリバー|投手|育成
+146|モーレ|投手|育成
+113|野田海人|捕手|育成
+120|野村大樹|捕手|育成
+111|新井唯斗|内野手|育成
+112|今岡拓夢|内野手|育成
+119|古賀輝希|内野手|育成
+126|谷口朝陽|内野手|育成
+130|金子功児|内野手|育成
+138|福尾遥真|内野手|育成
+140|コルニエル|内野手|育成
+147|アポンテ|内野手|育成
+116|奥村光一|外野手|育成
+132|ラマル|外野手|育成
+135|安藤銀杜|外野手|育成
+137|澤田遥斗|外野手|育成
+139|オケム|外野手|育成
+143|カルロス|外野手|育成`
+};
+const POS_ORDER={投手:1,捕手:2,内野手:3,外野手:4};
+function makeRoster(team){return ROSTERS[team].trim().split('\n').map(line=>{const [number,name,position,contract]=line.split('|');return{id:team+'-'+number+'-'+name,number,name,position,contract,status:'pool',custom:false}})}
+const state={};
+for(const t of Object.keys(ROSTERS)){
+ const key='npb-roster-v2-'+t;
+ try{state[t]=JSON.parse(localStorage.getItem(key))||makeRoster(t)}
+ catch(e){state[t]=makeRoster(t)}
+}
+let view='pool';
+const $=id=>document.getElementById(id);
+const team=()=> $('team').value;
+function save(){localStorage.setItem('npb-roster-v2-'+team(),JSON.stringify(state[team()]))}
+function render(){
+ const t=team(),players=state[t],q=$('search').value.trim().toLowerCase();
+ let shown=players.filter(p=>{
+  const inView=view==='all'||p.status===view;
+  const match=!q||[p.name,p.number,p.position,p.contract].join(' ').toLowerCase().includes(q);
+  return inView&&match
+ });
+ const sort=$('sort').value;
+ shown.sort((a,b)=>sort==='name'?a.name.localeCompare(b.name,'ja'):sort==='position'?(POS_ORDER[a.position]-POS_ORDER[b.position]||Number(a.number)-Number(b.number)):Number(a.number)-Number(b.number));
+ $('summary').innerHTML=`<span class="pill">名簿 ${players.length}人</span><span class="pill">一軍 ${players.filter(p=>p.status==='first').length}人</span><span class="pill">二軍 ${players.filter(p=>p.status==='second').length}人</span><span class="pill">未編成 ${players.filter(p=>p.status==='pool').length}人</span>`;
+ $('listTitle').textContent=({pool:'全選手・未編成',first:'一軍',second:'二軍',all:'選手名簿'})[view];
+ $('list').innerHTML='';
+ if(!shown.length){$('list').innerHTML='<div class="empty">該当する選手はいません</div>';return}
+ for(const p of shown){
+  const div=document.createElement('div');div.className='player';
+  const number=document.createElement('div');number.className='num';number.textContent=p.number;
+  const info=document.createElement('div');info.className='pinfo';
+  info.innerHTML='<div class="pname"></div><div class="meta"></div>';
+  info.querySelector('.pname').textContent=p.name;
+  info.querySelector('.meta').textContent=`${p.position} ・ ${p.contract==='育成'?'育成選手':'支配下'} ・ ${{pool:'未編成',first:'一軍',second:'二軍'}[p.status]}`;
+  const actions=document.createElement('div');actions.className='actions';
+  if(p.status!=='first'){const b=document.createElement('button');b.className='primary';b.textContent='一軍へ';b.onclick=()=>move(p.id,'first');actions.appendChild(b)}
+  if(p.status!=='second'){const b=document.createElement('button');b.className='secondary';b.textContent='二軍へ';b.onclick=()=>move(p.id,'second');actions.appendChild(b)}
+  if(p.status!=='pool'){const b=document.createElement('button');b.className='secondary';b.textContent='未編成';b.onclick=()=>move(p.id,'pool');actions.appendChild(b)}
+  const del=document.createElement('button');del.className='danger';del.textContent='削除';
+  del.onclick=()=>{if(confirm(p.name+'を名簿から削除しますか？')){state[t]=state[t].filter(x=>x.id!==p.id);save();render()}};
+  actions.appendChild(del);div.append(number,info,actions);$('list').appendChild(div)
+ }
+}
+function move(id,status){const p=state[team()].find(p=>p.id===id);if(p){p.status=status;save();render()}}
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
+ view=b.dataset.view;
+ document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));
+ render()
+}));
+$('team').addEventListener('change',()=>{
+ view='pool';
+ document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.view===view));
+ render()
+});
+$('search').addEventListener('input',render);
+$('sort').addEventListener('change',render);
+$('addBtn').onclick=()=>{
+ const name=$('newName').value.trim(),number=$('newNo').value.trim();
+ if(!name){alert('選手名を入力してください');return}
+ const p={id:team()+'-custom-'+Date.now(),number:number||'—',name,position:$('newPos').value,contract:$('newContract').value,status:$('newStatus').value,custom:true};
+ state[team()].push(p);save();$('newName').value='';$('newNo').value='';
+ view=p.status;
+ document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.view===view));
+ render()
+};
+$('exportBtn').onclick=()=>{
+ const players=state[team()];
+ const txt=players.map(p=>`${p.status==='first'?'一軍':p.status==='second'?'二軍':'未編成'}\t${p.number}\t${p.name}\t${p.position}\t${p.contract}`).join('\n');
+ const blob=new Blob(['\ufeff'+txt],{type:'text/plain;charset=utf-8'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download=(team()==='tigers'?'阪神':'西武')+'編成.txt';a.click();URL.revokeObjectURL(url)
+};
+$('resetBtn').onclick=()=>{
+ if(confirm('この球団の編成を初期状態に戻します。追加・削除・配置変更も消えます。よろしいですか？')){
+  state[team()]=makeRoster(team());save();render()
+ }
+};
+render();
+</script>
+</body>
+</html>
